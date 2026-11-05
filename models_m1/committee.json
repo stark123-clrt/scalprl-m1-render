@@ -1,0 +1,16 @@
+{
+  "seeds": [
+    1,
+    2,
+    3,
+    5,
+    6
+  ],
+  "trend_rule": [
+    "m15_d_ema50",
+    "m15_d_ema50"
+  ],
+  "max_hold": 60,
+  "target": 20,
+  "note": "comit\u00e9 de 5 agents OR M1 (1, 2, 3, 5, 6) choisi le 04/11/2026 ; test 2025-2026 \u00e0 0,15 $ : +279 $ hausse / +252 $ baisse (2024 perdant : \u00e0 tester en d\u00e9mo seulement)"
+}

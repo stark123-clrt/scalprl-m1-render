@@ -1,0 +1,12 @@
+# Plan Render (Blueprint) : New > Blueprint > choisir ce dépôt GitHub
+services:
+  - type: web
+    name: scalprl-m1
+    runtime: docker
+    plan: starter            # 512 Mo / 0,5 processeur : suffisant (mesuré ~400 Mo, 1-2 s par décision sur PC)
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SCALPRL_TOKEN   # mot de passe entre l'EA et le service (Render le génère ; à recopier dans l'EA)
+        generateValue: true
