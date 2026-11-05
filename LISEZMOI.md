@@ -30,8 +30,9 @@ les décisions sont donc les mêmes (même code de calcul, copié tel quel).
    (`app.py` doit être à la racine du dépôt).
 2. **Render** : *New > Blueprint* et choisir le dépôt (le fichier `render.yaml` règle tout),
    ou *New > Web Service > Docker*.
-   - Offre **Starter** (512 Mo, 0,5 processeur, ~7 $/mois). L'offre gratuite est trop lente (0,1 processeur)
-     et s'endort sans visite.
+   - Offre **gratuite** choisie (512 Mo, 0,1 processeur) : chaque décision prend ~10-20 s (entrée retardée d'autant),
+     le service s'endort après 15 min sans requête (week-end) puis redemande l'historique au réveil.
+     Offre **Starter** (~7 $/mois, carte à ajouter dans *Billing*) : 0,5 processeur, décision en ~2-4 s ; changer `plan: free` -> `plan: starter`.
    - Variable d'environnement `SCALPRL_TOKEN` : c'est le mot de passe entre l'EA et le service
      (le Blueprint le génère tout seul ; le recopier depuis *Environment*).
    - Vérifier : `https://<nom-du-service>.onrender.com/health` doit répondre.

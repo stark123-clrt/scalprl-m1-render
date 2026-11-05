@@ -3,7 +3,7 @@ services:
   - type: web
     name: scalprl-m1
     runtime: docker
-    plan: starter            # 512 Mo / 0,5 processeur : suffisant (mesuré ~400 Mo, 1-2 s par décision sur PC)
+    plan: free               # gratuit : 512 Mo / 0,1 processeur (décision ~10-20 s) ; « starter » (7 $/mois) = 0,5 processeur
     region: frankfurt
     healthCheckPath: /health
     autoDeploy: true

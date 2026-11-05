@@ -21,7 +21,7 @@ input long   InpShadowMagic    = 260501;    // Fantôme : position suivie = cell
 input double InpLots           = 0.01;      // Lot (mode réel)
 input long   InpMagic          = 260502;    // Numéro magique de CE robot (mode réel)
 input int    InpHistoryDays    = 130;       // Jours d'historique M1 envoyés à Render (~110 000 minutes utiles)
-input int    InpTimeoutSec     = 30;        // Attente max d'une réponse de Render (s)
+input int    InpTimeoutSec     = 50;        // Attente max d'une réponse de Render (s) — offre gratuite : ~10-20 s
 input double InpSafetySL       = 25.0;      // SL de sécurité ($ de prix) — 0 = aucun
 input int    InpMaxHoldMin     = 60;        // Durée max d'un trade en minutes (60, comme à l'entraînement)
 input double InpMaxSpread      = 1.0;       // Pas d'entrée si spread > X $
