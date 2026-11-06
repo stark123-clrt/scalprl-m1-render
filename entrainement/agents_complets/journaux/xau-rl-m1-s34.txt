@@ -1,0 +1,28 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1793691868.589656       8 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1793691886.855345       8 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+  stratégies M1 (signaux/jour moyens) : y01 65, y02 42, y03 51, y04 29, y05 110, y06 43, y07 79, y08 16, y09 57, y10 22, y11 89, y12 134, y13 28, y14 6, y15 41, y16 18
+M1 tendance | 3,049,951 bougies x 136 | règle ['m15_d_ema50', 'm15_d_ema50'] (tendance active 89%) | max 60 min | objectif 20 trades/j | 12M pas (1.3 min)
+  graine 3 | 1.2M pas | VAL 2024 à 0.15$ : réel -3953 (93.2 tr/j) | miroir -4354 | moyenne -4154 (36 min)
+  graine 3 | 2.4M pas | VAL 2024 à 0.15$ : réel -4506 (108.5 tr/j) | miroir -4987 | moyenne -4746 (69 min)
+  graine 3 | 3.6M pas | VAL 2024 à 0.15$ : réel -3967 (94.4 tr/j) | miroir -4360 | moyenne -4164 (104 min)
+  graine 3 | 4.8M pas | VAL 2024 à 0.15$ : réel -2057 (48.9 tr/j) | miroir -2126 | moyenne -2092 (139 min)
+  graine 3 | 6.0M pas | VAL 2024 à 0.15$ : réel -1352 (35.3 tr/j) | miroir -1392 | moyenne -1372 (179 min)
+  graine 3 | 7.2M pas | VAL 2024 à 0.15$ : réel -1242 (32.3 tr/j) | miroir -1228 | moyenne -1235 (210 min)
+  graine 3 | 8.4M pas | VAL 2024 à 0.15$ : réel -794 (19.4 tr/j) | miroir -559 | moyenne -676 (243 min)
+  graine 3 | 9.6M pas | VAL 2024 à 0.15$ : réel -639 (17.9 tr/j) | miroir -559 | moyenne -599 (277 min)
+  graine 3 | 10.8M pas | VAL 2024 à 0.15$ : réel -397 (14.5 tr/j) | miroir -343 | moyenne -370 (307 min)
+  graine 3 | 12.0M pas | VAL 2024 à 0.15$ : réel -352 (12.5 tr/j) | miroir -462 | moyenne -407 (344 min)
+  graine 4 | 1.2M pas | VAL 2024 à 0.15$ : réel -4362 (99.2 tr/j) | miroir -4207 | moyenne -4284 (377 min)
+  graine 4 | 2.4M pas | VAL 2024 à 0.15$ : réel -5813 (128.4 tr/j) | miroir -5540 | moyenne -5676 (421 min)
+  graine 4 | 3.6M pas | VAL 2024 à 0.15$ : réel -5909 (136.1 tr/j) | miroir -5851 | moyenne -5880 (466 min)
+  graine 4 | 4.8M pas | VAL 2024 à 0.15$ : réel -2660 (65.8 tr/j) | miroir -2625 | moyenne -2642 (509 min)
+  graine 4 | 6.0M pas | VAL 2024 à 0.15$ : réel -1864 (49.3 tr/j) | miroir -1975 | moyenne -1920 (553 min)
+  graine 4 | 7.2M pas | VAL 2024 à 0.15$ : réel -1387 (40.0 tr/j) | miroir -1569 | moyenne -1478 (598 min)
+  graine 4 | 8.4M pas | VAL 2024 à 0.15$ : réel -613 (23.7 tr/j) | miroir -807 | moyenne -710 (641 min)
+  graine 4 | 9.6M pas | VAL 2024 à 0.15$ : réel -519 (20.7 tr/j) | miroir -818 | moyenne -668 (681 min)

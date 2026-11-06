@@ -23,6 +23,10 @@ les décisions sont donc les mêmes (même code de calcul, copié tel quel).
 | `models_m1/` | les 5 agents + la normalisation (~4 Mo) |
 | `requirements.txt`, `Dockerfile`, `render.yaml` | installation sur Render |
 | `mql5/ScalpRL_M1_Render.mq5` | le nouvel EA (WebRequest), compilé sans erreur |
+| `entrainement/` | **sauvegarde de l'entraînement** : code source, 6 agents complets, notebooks Kaggle, mode d'emploi pour réentraîner (voir `entrainement/LISEZMOI.md`) |
+| `pc_local/` | ancienne version PC (service Python + EA `ScalpRL_Trend_M1`), pour référence |
+
+`entrainement/` et `pc_local/` ne sont pas envoyés dans le service Render (`.dockerignore`).
 
 ## Mise en ligne
 
