@@ -8,9 +8,17 @@
 //|  Render en suivant la position du robot actuel (magique 260501),   |
 //|  l'écrit dans le journal (onglet Experts) mais ne passe AUCUN      |
 //|  ordre. Pour trader : InpShadow = false (et arrêter l'autre robot).|
+//|  FILTRE VAGUES (v1.10, idée de l'utilisateur 09/11/2026) : dans    |
+//|  la tendance, le prix fait des vagues vertes (jusqu'à un pic) et   |
+//|  rouges (jusqu'à un creux). L'EA refuse un BUY tant que la vague   |
+//|  en cours est rouge (creux pas confirmé par un rebond de X ATR M1) |
+//|  et un SELL tant qu'elle est verte. Option : refus trop près du    |
+//|  pic / du creux. Les sorties décidées par l'IA ne changent pas.    |
+//|  Le journal affiche chaque minute la tendance vue par l'IA        |
+//|  (renvoyée par Render) et la vague en cours, filtre actif ou non.  |
 //+------------------------------------------------------------------+
 #property copyright "GoldStark"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 #include <Trade\Trade.mqh>
 
@@ -26,6 +34,11 @@ input double InpSafetySL       = 25.0;      // SL de sécurité ($ de prix) — 
 input int    InpMaxHoldMin     = 60;        // Durée max d'un trade en minutes (60, comme à l'entraînement)
 input double InpMaxSpread      = 1.0;       // Pas d'entrée si spread > X $
 input int    InpCloseBeforeEnd = 5;         // Fermer si la séance se termine dans moins de N min
+input bool   InpWaveFilter     = false;     // Filtre vagues : BUY seulement en vague verte, SELL seulement en vague rouge
+input double InpWaveATR        = 3.0;       // Taille mini d'une vague pour confirmer un pic / un creux (en ATR M1)
+input double InpLateWaveATR    = 0;         // Pas d'entrée si la vague a déjà fait plus de X ATR M1 (0 = non)
+input int    InpPeakZoneMin    = 0;         // Zone du pic : fourchette des N dernières minutes (0 = non)
+input double InpPeakZonePct    = 80;        // Pas de BUY au-dessus de X % de cette fourchette (SELL : sous 100 - X %)
 
 CTrade   trade;
 datetime g_lastBar = 0, g_reqBar = 0;
@@ -34,6 +47,7 @@ bool     g_histSent = false;
 int      g_histTries = 0;
 uint     g_lastHistTry = 0;
 #define  CHUNK 15000                         // minutes M1 par envoi d'historique (~0,7 Mo)
+#define  WAVE_BARS 3000                      // minutes M1 relues pour suivre les vagues (~2 jours)
 
 //--- outils ---------------------------------------------------------
 long ServerToUTC(datetime t) { return (long)t - g_gmtOff; }
@@ -111,6 +125,84 @@ string Http(string path, string body, int &code)
    return s;
 }
 
+//--- filtre vagues (même calcul que research/scalp_m1_swing_test.py) --
+// Bougies M1 FERMÉES. ATR M1 = moyenne exponentielle (1/14) du vrai range, comme les informations de l'IA.
+// Zigzag : vague verte tant que le prix ne recule pas de InpWaveATR x ATR sous le plus haut de la vague
+// (alors pic confirmé -> vague rouge), vague rouge tant qu'il ne remonte pas de InpWaveATR x ATR au-dessus du plus bas.
+int    g_wDir = 0;                                   // vague en cours : 1 verte, -1 rouge, 0 inconnue
+double g_wExt = 0, g_wStart = 0, g_wAtr = 0, g_wClose = 0, g_wPos = 0.5;
+
+// Calcule la vague en cours (et la place du prix dans la fourchette InpPeakZoneMin) sur les bougies M1 fermées.
+bool WaveState()
+{
+   g_wDir = 0;
+   MqlRates r[]; ArraySetAsSeries(r, false);
+   int n = CopyRates(_Symbol, PERIOD_M1, 1, WAVE_BARS, r);
+   if(n < 200) return false;
+   double atr = 0, ext = r[0].high, start = r[0].low;
+   int d = 1;
+   for(int t = 0; t < n; t++)
+   {
+      double tr = r[t].high - r[t].low;
+      if(t > 0) tr = MathMax(tr, MathMax(MathAbs(r[t].high - r[t - 1].close), MathAbs(r[t].low - r[t - 1].close)));
+      atr = (t == 0) ? tr : atr + (tr - atr) / 14.0;
+      double a = MathMax(atr, 1e-6);
+      if(t > 0 && r[t].time - r[t - 1].time > 15 * 60) { d = 1; ext = r[t].high; start = r[t].low; }   // pause / trou : on repart
+      if(d == 1)
+      {
+         if(r[t].high > ext) ext = r[t].high;
+         else if(r[t].low < ext - InpWaveATR * a) { d = -1; start = ext; ext = r[t].low; }   // pic confirmé -> vague rouge
+      }
+      else
+      {
+         if(r[t].low < ext) ext = r[t].low;
+         else if(r[t].high > ext + InpWaveATR * a) { d = 1; start = ext; ext = r[t].high; }  // creux confirmé -> vague verte
+      }
+   }
+   g_wDir = d; g_wExt = ext; g_wStart = start; g_wAtr = MathMax(atr, 1e-6); g_wClose = r[n - 1].close; g_wPos = 0.5;
+   if(InpPeakZoneMin > 0 && n >= InpPeakZoneMin)
+   {
+      double hh = r[n - 1].high, ll = r[n - 1].low;
+      for(int i = n - InpPeakZoneMin; i < n; i++) { hh = MathMax(hh, r[i].high); ll = MathMin(ll, r[i].low); }
+      g_wPos = (hh - ll > 1e-9) ? (g_wClose - ll) / (hh - ll) : 0.5;
+   }
+   return true;
+}
+
+// Texte de la vague en cours pour le journal
+string WaveText()
+{
+   if(g_wDir == 0) return "vague ?";
+   double leg = (g_wClose - g_wStart) / g_wAtr;
+   if(g_wDir == 1)
+      return StringFormat("vague VERTE depuis le creux %.2f (%+.1f ATR, pic confirmé si retour à %.2f)", g_wStart, leg, g_wExt - InpWaveATR * g_wAtr);
+   return StringFormat("vague ROUGE depuis le pic %.2f (%+.1f ATR, creux confirmé si remontée à %.2f)", g_wStart, leg, g_wExt + InpWaveATR * g_wAtr);
+}
+
+// true si l'entrée « target » (1 = BUY, -1 = SELL) doit être refusée (WaveState() doit avoir été appelé juste avant)
+bool WaveBlock(int target, string &why)
+{
+   if(g_wDir == 0) return false;                                  // pas assez d'historique : pas de filtre
+   double leg = (g_wClose - g_wStart) / g_wAtr;
+   if(InpWaveFilter)
+   {
+      if(target == 1 && g_wDir != 1)
+      { why = StringFormat("vague rouge en cours (plus bas %.2f, creux pas confirmé : il faut remonter à %.2f)", g_wExt, g_wExt + InpWaveATR * g_wAtr); return true; }
+      if(target == -1 && g_wDir != -1)
+      { why = StringFormat("vague verte en cours (plus haut %.2f, pic pas confirmé : il faut redescendre à %.2f)", g_wExt, g_wExt - InpWaveATR * g_wAtr); return true; }
+      if(InpLateWaveATR > 0 && target * leg > InpLateWaveATR)
+      { why = StringFormat("vague déjà longue (%.1f ATR depuis %.2f)", MathAbs(leg), g_wStart); return true; }
+   }
+   if(InpPeakZoneMin > 0)
+   {
+      if(target == 1 && g_wPos > InpPeakZonePct / 100.0)
+      { why = StringFormat("trop près du pic (%.0f %% de la fourchette des %d dernières minutes)", g_wPos * 100, InpPeakZoneMin); return true; }
+      if(target == -1 && g_wPos < 1 - InpPeakZonePct / 100.0)
+      { why = StringFormat("trop près du creux (%.0f %% de la fourchette des %d dernières minutes)", g_wPos * 100, InpPeakZoneMin); return true; }
+   }
+   return false;
+}
+
 //--- historique -----------------------------------------------------
 bool SendHistory()
 {
@@ -160,6 +252,10 @@ int OnInit()
    PrintFormat("ScalpRL_M1_Render prêt | %s | service %s | décalage serveur/UTC %d h",
                InpShadow ? StringFormat("MODE FANTÔME (aucun ordre, suit le robot magique %I64d)", InpShadowMagic) : "MODE RÉEL",
                InpURL, g_gmtOff / 3600);
+   PrintFormat("Filtre vagues : %s | zone du pic : %s",
+               InpWaveFilter ? StringFormat("ACTIF (vague de %.1f ATR M1%s)", InpWaveATR,
+                                            InpLateWaveATR > 0 ? StringFormat(", pas d'entrée après %.1f ATR", InpLateWaveATR) : "") : "coupé",
+               InpPeakZoneMin > 0 ? StringFormat("%d min, %.0f %%", InpPeakZoneMin, InpPeakZonePct) : "coupée");
    if(InpToken == "") Print("Attention : InpToken vide (le service Render refusera les requêtes si SCALPRL_TOKEN est défini)");
    return INIT_SUCCEEDED;
 }
@@ -210,20 +306,38 @@ void CheckNewBar()
    if(StringSplit(ans, ',', f) < 3 || f[0] == "error") { PrintFormat("Pas de décision de Render sur cette bougie (%s)", ans); return; }
    if(StringToInteger(f[0]) != g_reqId) return;
    g_reqBar = bar;
-   Apply((int)StringToInteger(f[1]), f[2], GetTickCount() - t0);
+   string trend = "tendance IA ?";                                     // ancienne version du service : 3 champs seulement
+   if(ArraySize(f) >= 5)
+   {
+      int tc = (int)StringToInteger(f[3]);
+      trend = StringFormat("tendance IA %s (écart EMA50 M15 %+.2f ATR)", tc == 1 ? "HAUSSE" : (tc == -1 ? "BAISSE" : "AUCUNE"),
+                           StringToDouble(f[4]));
+   }
+   Apply((int)StringToInteger(f[1]), f[2], GetTickCount() - t0, trend);
 }
 
-void Apply(int action, string votes, uint ms)
+void Apply(int action, string votes, uint ms, string trend)
 {
    int target = action == 1 ? 1 : (action == 2 ? -1 : 0);
    ulong tk; double op; datetime ot;
    int pos = CurrentPos(tk, op, ot);
    if(pos != 0 && (int)((g_reqBar - (ot - ot % 60)) / 60) >= InpMaxHoldMin) target = 0;
+   WaveState();                                                        // vague en cours (journal + filtre)
    if(MinutesToSessionEnd() < InpCloseBeforeEnd) target = 0;          // fin de séance / week-end : à plat
+   if(target != 0 && target != pos)                                    // nouvelle entrée : filtre vagues
+   {
+      string why = "";
+      if(WaveBlock(target, why))
+      {
+         PrintFormat("%sFiltre vagues : %s du comité refusé -> %s", InpShadow ? "FANTÔME | " : "", target == 1 ? "BUY" : "SELL", why);
+         target = 0;                                                   // pas d'entrée (si l'IA retournait sa position, elle sort quand même)
+      }
+   }
    string txt = target == 1 ? "BUY" : (target == -1 ? "SELL" : "A PLAT");
+   string info = trend + " | " + WaveText();
    if(InpShadow)
-   { PrintFormat("FANTÔME | Render : %s (votes %s, réponse %u ms) | position du robot actuel %d", txt, votes, ms, pos); return; }
-   PrintFormat("Comité Render : %s (votes %s, réponse %u ms) | position %d", txt, votes, ms, pos);
+   { PrintFormat("FANTÔME | Render : %s (votes %s, réponse %u ms) | %s | position du robot actuel %d", txt, votes, ms, info, pos); return; }
+   PrintFormat("Comité Render : %s (votes %s, réponse %u ms) | %s | position %d", txt, votes, ms, info, pos);
    if(target == pos) return;
    if(pos != 0) trade.PositionClose(tk);
    if(target == 0) return;

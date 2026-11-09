@@ -4,7 +4,8 @@ mais l'échange se fait par Internet au lieu des fichiers du PC.
 L'EA MT5 (mql5/ScalpRL_M1_Render.mq5) appelle ce service avec WebRequest :
   POST /history?part=K&last=0|1   historique M1 (lignes « temps_utc,o,h,l,c,spread,volume », prix BID), envoyé en morceaux
   POST /decide                    1re ligne « id,t_dec,pos,upnl,age,n_day » + les 30 dernières minutes M1
-                                  -> « id,action,votes »  (action 0 = à plat, 1 = BUY, 2 = SELL)
+                                  -> « id,action,votes,tendance,ecart »  (action 0 = à plat, 1 = BUY, 2 = SELL ;
+                                     tendance 1 = hausse, -1 = baisse, 0 = aucune ; ecart = prix - EMA50 M15 en ATR M15)
                                   -> « need_history » si le service n'a pas (ou plus) l'historique : l'EA le renvoie
                                   -> « error,... » : pas de décision sur cette minute
   GET  /health                    état du service (pour Render) ; GET /log : dernières décisions (texte)
@@ -79,7 +80,8 @@ def decide(m1, t_dec, state):
     allowed = features_v5.allowed_direction(row[TREND_COLS[0]], row[TREND_COLS[1]])
     action = features_v5.strict_rule(raw, state["pos"], allowed)
     why = explain(policies, x, st, features_m1.feature_groups_m1(cols), raw)
-    return action, votes, dict(raw=raw, allowed=allowed, why=why, close=float(close.iloc[-1]))
+    return action, votes, dict(raw=raw, allowed=allowed, why=why, close=float(close.iloc[-1]),
+                               ecart=float(np.nan_to_num(row[TREND_COLS[0]])))
 
 app = FastAPI(title="Comité RL OR M1", docs_url=None, redoc_url=None)
 
@@ -163,7 +165,8 @@ def _decide_text(body):
         S["last"] = f"{t:%Y-%m-%d %H:%M} UTC {NAMES[action]}"
         log(f"{t:%Y-%m-%d %H:%M} UTC | {NAMES[action]:6s} | comité {NAMES[info['raw']]} votes {votes} | tendance {trend} "
             f"| pos {state['pos']:+d} age {state['age']} | portée par : {info['why']} | close {info['close']:.2f} | {dt:.1f}s")
-        return f"{rid},{action},{''.join(str(v) for v in votes)}"
+        # réponse : id, action, votes, tendance vue par l'IA (1 hausse, -1 baisse, 0 aucune), écart à l'EMA50 M15 (en ATR M15)
+        return f"{rid},{action},{''.join(str(v) for v in votes)},{int(info['allowed'])},{info['ecart']:.2f}"
 
 log(f"Comité OR M1 chargé (agents {MODELS[4]} ; {len(MODELS[2])} features ; règle {TREND_COLS} ; fenêtre {WINDOW:,} min ; "
     f"token {'activé' if TOKEN else 'NON activé'})")
