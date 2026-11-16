@@ -9,6 +9,7 @@ L'EA MT5 (mql5/ScalpRL_M1_Render.mq5) appelle ce service avec WebRequest :
                                   -> « need_history » si le service n'a pas (ou plus) l'historique : l'EA le renvoie
                                   -> « error,... » : pas de décision sur cette minute
   GET  /health                    état du service (pour Render) ; GET /log : dernières décisions (texte)
+  GET  /bougies_or                bougies M15 + H1 de l'or (API publique Deriv) pour le Worker Cloudflare de l'agent LLM M15
 Les bougies viennent de MT5 (prix, spread et volume du compte Deriv) : décisions identiques au robot du PC.
 Sécurité : si la variable d'environnement SCALPRL_TOKEN existe, chaque requête doit avoir l'en-tête X-Token identique.
 """
@@ -103,6 +104,45 @@ def health():
 def get_log(request: Request, n: int = 200):
     check(request)
     return "\n".join(list(LOG)[-n:])
+
+# ── Relais des bougies de l'or pour l'agent LLM M15 (Worker Cloudflare agent-or-m15), ajouté le 16/11/2026 ──
+# Deriv refuse les serveurs de Cloudflare (erreur 429) mais accepte Render (comme GoldStark) : le Worker demande ici
+# les bougies M15 et H1 de frxXAUUSD (API publique Deriv, données de marché, sans compte). N'affecte pas le comité M1.
+DERIV_WS = os.environ.get("DERIV_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public?app_id=34xSuGBG6QR7xUOC8Kv4P")
+
+async def _deriv_candles(n15, n1):
+    import asyncio, websockets
+    last = None
+    for attempt in range(3):
+        try:
+            out = {}
+            async with websockets.connect(DERIV_WS, open_timeout=15, close_timeout=5, max_size=2 ** 23) as ws:
+                for rid, gran, n in ((1, 900, n15), (2, 3600, n1)):
+                    await ws.send(json.dumps({"req_id": rid, "ticks_history": "frxXAUUSD", "style": "candles",
+                                              "granularity": gran, "count": n, "end": "latest", "adjust_start_time": 1}))
+                while len(out) < 2:
+                    d = json.loads(await asyncio.wait_for(ws.recv(), 15))
+                    if d.get("error"):
+                        raise RuntimeError(d["error"].get("message", str(d["error"])))
+                    if d.get("req_id") in (1, 2):
+                        out[d["req_id"]] = d.get("candles") or []
+            return out[1], out[2]
+        except Exception as e:
+            last = e
+            await asyncio.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"Deriv injoignable après 3 essais : {last}")
+
+@app.get("/bougies_or")
+async def bougies_or(request: Request, n15: int = 1000, n1: int = 1000):
+    check(request)
+    t0 = time.time()
+    try:
+        m15, h1 = await _deriv_candles(min(max(n15, 1), 5000), min(max(n1, 1), 5000))
+    except Exception as e:
+        log(f"Relais bougies or : ERREUR {e}")
+        raise HTTPException(status_code=502, detail=str(e)[:300])
+    log(f"Relais bougies or : {len(m15)} M15 + {len(h1)} H1 en {time.time() - t0:.1f}s")
+    return {"source": "Deriv (relais Render)", "m15": m15, "h1": h1}
 
 @app.post("/history", response_class=PlainTextResponse)
 async def history(request: Request, part: int = 0, last: int = 1):
